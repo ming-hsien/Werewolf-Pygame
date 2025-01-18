@@ -55,33 +55,59 @@ def show_game_menu_page():
     
     return menu_buttons_rect
 
-def shuffle_roles_card(role_list):
-    random.shuffle(role_list)
-    return role_list
-
-class Games:
+class Game:
     def __init__(self, game_type, role_path):
         self.game_type = game_type
         self.game_roles = []
+        self.current_role = 0
+        
+         # 設定卡牌背面
+        self.card_back = pygame.transform.scale(pygame.image.load("./assets/卡牌背面.jpg"), (300, 450)) 
+        self.card_back_rect = self.card_back.get_rect(center=(SCREEN_WIDTH // 2, 300))
+        
+        # next card button
+        self.next_card_button = pygame.transform.scale(pygame.image.load("./assets/next.png"), (150, 150)) 
+        self.next_card_button_rect = self.next_card_button.get_rect(center=(SCREEN_WIDTH - 85, SCREEN_HEIGHT // 2))
         
         if game_type not in ROLES_CONFIG:
             print(f"[Error] Game type : {game_type} doesn't exist !")
         else:
             self.add_roles(role_path)
+
+    def shuffle_roles_card(self, role_list):
+        random.shuffle(role_list)
+        return role_list
         
     def add_roles(self, role_path):
         buf = []
         for role in ROLES_CONFIG[self.game_type]:
             buf.append(role_path[role])
-        buf = shuffle_roles_card(buf)
-        for rp in buf:
-            self.game_roles.append(pygame.image.load(rp))          
+        buf = self.shuffle_roles_card(buf)
+        self.game_roles = buf
+        # for rp in buf:
+        #     self.game_roles.append(pygame.transform.scale(pygame.image.load(rp), (300, 450)))
+    def show_next_card_button(self):
+        screen.blit(self.next_card_button, self.next_card_button_rect)
+        
+    def show_next_card_page(self):
+        if self.current_role >= len(self.game_roles):
+            show_start_page()
+            return
 
-    def show_roles_page(self):
         screen.blit(background, (0,0))
-        print(self.game_type, self.game_roles)
+        screen.blit(pygame.transform.scale(pygame.image.load(self.game_roles[self.current_role]), (300, 450)), (250, 75))
+        show_return_button()
+        self.current_role += 1
+        
+        if self.current_role < len(self.game_roles):
+            self.show_next_card_button()
 
-class Roles:
+    def show_card_back_page(self):
+        screen.blit(background, (0,0))
+        screen.blit(self.card_back, self.card_back_rect)
+        show_return_button()
+
+class RoleLoader:
     def __init__(self, dir_path):
         self.role_path = {}
         self.load_roles_img(dir_path)
@@ -92,55 +118,47 @@ class Roles:
             if os.path.basename(fn)[0] == '.':
                 continue
             self.role_path[os.path.basename(fn).split('.')[0]] = os.path.join(dir_path, fn)
-            print(f"Load role Success: {os.path.join(dir_path, fn)}")
+            # print(f"Load role Success: {os.path.join(dir_path, fn)}")
         
 
 def main():
-    current_page = "start" # start -> game_menu -> role_page
-    roles_obj = Roles("./assets/role")
-    games_obj = ""
-    running = True
+    current_page = "start"
+    role_loader = RoleLoader("./assets/role")
+    game = None
     menu_buttons_rect = []
+    running = True
     
     while running:
         for event in pygame.event.get():
-            # 設定點擊關閉頁面
             if event.type == pygame.QUIT:
                 running = False
-                
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    running = False
-            # 設定點擊遊戲開始的按鈕後，頁面狀態更新
-            elif event.type == pygame.MOUSEBUTTONDOWN and game_start_rect.collidepoint(event.pos):
-                current_page = "game_menu"
-            
-            # 設定點擊返回按鈕，頁面狀態更新
-            elif event.type == pygame.MOUSEBUTTONDOWN and return_button_rect.collidepoint(event.pos):
-                if current_page == "game_menu":
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if current_page == "start" and game_start_rect.collidepoint(event.pos):
+                    current_page = "menu"
+                    menu_buttons_rect = show_game_menu_page()
+                elif current_page == "menu":
+                    for i, rect in enumerate(menu_buttons_rect):
+                        if rect.collidepoint(event.pos):
+                            game_type = list(ROLES_CONFIG.keys())[i]
+                            game = Game(game_type, role_loader.role_path)
+                            current_page = "card_back"
+                            game.show_card_back_page()
+                            break
+                    if return_button_rect.collidepoint(event.pos):
+                        current_page = "start"
+                        show_start_page()
+                elif current_page == "card_back" and game.card_back_rect.collidepoint(event.pos):
+                    current_page = "card_page"
+                    game.show_next_card_page()
+                elif current_page == "card_page" and return_button_rect.collidepoint(event.pos):
                     current_page = "start"
-                elif current_page == "role_page":
-                    current_page = "game_menu"
-                    
-            elif event.type == pygame.MOUSEBUTTONDOWN and menu_buttons_rect[0].collidepoint(event.pos):
-                games_obj = Games(list(ROLES_CONFIG.keys())[0], roles_obj.role_path)
-                current_page = "role_page"
-            elif event.type == pygame.MOUSEBUTTONDOWN and menu_buttons_rect[1].collidepoint(event.pos):
-                games_obj = Games(list(ROLES_CONFIG.keys())[1], roles_obj.role_path)
-                current_page = "role_page"
-            elif event.type == pygame.MOUSEBUTTONDOWN and menu_buttons_rect[2].collidepoint(event.pos):
-                games_obj = Games(list(ROLES_CONFIG.keys())[2], roles_obj.role_path)
-                current_page = "role_page"
-            
-                
+                    show_start_page()
+                elif current_page == "card_page" and game.next_card_button_rect.collidepoint(event.pos):
+                    current_page = "card_back"
+                    game.show_card_back_page()
+
         if current_page == "start":
             show_start_page()
-        
-        elif current_page == "game_menu":
-            menu_buttons_rect = show_game_menu_page()
-        
-        elif current_page == "role_page":
-            games_obj.show_roles_page()
 
         pygame.display.flip()
         clock.tick(FPS)
